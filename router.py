@@ -78,3 +78,4 @@ if __name__ == '__main__':
     m5 = Middlebox(5, nodes_map.copy())
 
     print(m1.get_routing_table())
+    print(m2.get_routing_table())
