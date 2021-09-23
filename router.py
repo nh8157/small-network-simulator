@@ -79,3 +79,4 @@ if __name__ == '__main__':
 
     print(m1.get_routing_table())
     print(m2.get_routing_table())
+    print(m3.get_routing_table())
