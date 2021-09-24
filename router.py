@@ -1,5 +1,6 @@
 import abc
 import graph as g
+import packet as p
 
 
 class Middlebox:
@@ -10,6 +11,9 @@ class Middlebox:
         self.neighbor = None
         self.iBGP = None
         self.update_routing_table()
+
+    def get_id(self):
+        return self.id
 
     def update_graph(self, n1, n2, cost):
         if not cost:
@@ -39,8 +43,15 @@ class Middlebox:
 
 class Router(Middlebox):
     # ordinary router without any special function
-    def route(self, packet):
-        pass
+    def route(self, packet: p.Packet):
+        receiver = packet.get_receiver()
+        packet.stamp_packet(self.get_id())
+        if receiver != self.get_id():
+            # packet has not arrived at the destination
+            packet.dec_TTL()
+        else:
+            packet.terminate_packet()
+        return self.get_routing_table()[receiver]
 
     def start_iBGP(self, *args):
         pass
@@ -70,13 +81,20 @@ if __name__ == '__main__':
         4: {2: 10, 3: 2, 5: 5},
 		5: {3: 6, 4: 5}
     }
-    m0 = Middlebox(0, nodes_map.copy())
-    m1 = Middlebox(1, nodes_map.copy())
-    m2 = Middlebox(2, nodes_map.copy())
-    m3 = Middlebox(3, nodes_map.copy())
-    m4 = Middlebox(4, nodes_map.copy())
-    m5 = Middlebox(5, nodes_map.copy())
+    
+    pk = p.Packet(0, 5)
+    
+    m0 = Router(0, nodes_map.copy())
+    m1 = Router(1, nodes_map.copy())
+    m2 = Router(2, nodes_map.copy())
+    m3 = Router(3, nodes_map.copy())
+    m4 = Router(4, nodes_map.copy())
+    m5 = Router(5, nodes_map.copy())
 
-    print(m1.get_routing_table())
+    print(m0.get_routing_table())
     print(m2.get_routing_table())
     print(m3.get_routing_table())
+    
+    print(m0.route(pk))
+    
+    print(pk.get_TTL())
