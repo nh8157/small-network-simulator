@@ -1,6 +1,7 @@
 class Graph:
     def __init__(self, nodes_map) -> None:
         self.nb_nodes = len(nodes_map.keys())
+        self.table = None
         self.map = nodes_map
 
     def dijkstra(self, source) -> dict:
@@ -27,6 +28,7 @@ class Graph:
             visited += 1
             table[min_node]['visited'] = True
         # construct the routing table, given the dijkstra table
+        self.table = table
         routing = {dst: self.get_next_hop(table, source, dst) for dst in self.map.keys()}
         return routing
 
@@ -36,8 +38,11 @@ class Graph:
         elif dst == source:
             return None
         return self.get_next_hop(table, source, table[dst]['pred'])
+    
+    def get_cost(self, dest) -> int:
+        return self.table[dest]['dist']
 
-    def has_link(self, n1, n2):
+    def has_link(self, n1, n2) -> bool:
         return n1 in self.map[n2].keys() and n2 in self.map[n1].keys()
 
     def create_link(self, n1, n2, cost=1) -> None:
@@ -59,6 +64,9 @@ class Graph:
 
     def get_map(self) -> dict:
         return self.map.copy()
+    
+    def get_table(self) -> dict:
+        return self.table.copy()
 
 
 if __name__ == '__main__':

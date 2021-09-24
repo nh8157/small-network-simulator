@@ -10,6 +10,9 @@ nodes_map = {
     5: {3: 6, 4: 5}
 }
 
+class Simulator:
+    pass
+
 
 def main():
     # define a new packet
@@ -22,9 +25,7 @@ def main():
                 for i in range(len(nodes_map.keys()))]
 
     while (pk.get_TTL() and not pk.has_terminate()):
-        print(sender)
         sender = routers[sender].route(pk)
-        print(pk.get_path())
 
 
 main()
