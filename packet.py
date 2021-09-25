@@ -6,6 +6,9 @@ class Packet:
         self.TTL = 16
         self.path = []
 
+    def get_sender(self):
+        return self.sender
+
     def get_receiver(self):
         return self.receiver
 
@@ -30,4 +33,3 @@ class Packet:
 
 if __name__ == '__main__':
     p = Packet(1, 2)
-    p
