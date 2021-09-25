@@ -110,22 +110,30 @@ class Middlebox:
     def remove_iBGP_ad(self, router, advert):
         # called when an iBGP session is down and self is the client
         # print(self.get_id(), self.iBGP_msg, router, advert)
+        # print(self.get_id(), router, advert)
         for dest in self.iBGP_msg.keys():
             for i in self.iBGP_msg[dest]:
                 # the router is the advertiser of the iBGP msg or the gateway
+                # print(self.get_id(), "IBG_msg", i)
                 if router == i[0] and advert == i[1]:
                     # if the router is one of the gateway routers to an external dest
                     # print(self.get_id(), "removing", router, advert)
+                    # print("route removed")
                     self.iBGP_msg[dest].remove(i)
                     if not len(self.iBGP_msg[dest]):
                         del self.iBGP_msg[dest]
                         self.remove_routing_table(dest)
-                        return self.iBGP['client'], self.get_id()
+                        return self.iBGP['client'], self.get_id(), None
                     else:
                         self.opt_iBGP_route(dest)
+                        router = self.routing_table[dest]
+                        ad = {
+                            'dest': [dest],
+                            'gate': router,
+                            'advertiser': self.get_id()
+                        }
         # if self is a route reflector then return the list of client so that these clients also remove the ad from their list
-        # print(self.get_id(), self.iBGP_msg)
-        return self.iBGP['client'], self.get_id()
+        return self.iBGP['client'], self.get_id(), ad
 
     def get_iBGP_ad(self, dest, advert):
         for i in self.iBGP_msg[dest]:
@@ -195,8 +203,7 @@ class RR(Middlebox):
         if args[2] == "client":
             for i in args[0]:
                 self.iBGP['server'].remove(i)
-                self.remove_iBGP_ad(i, args[1])
-                return self.iBGP['client'], self.get_id()
+                return self.remove_iBGP_ad(i, args[1])
         else:
             for i in args[0]:
                 self.iBGP['client'].remove(i)
@@ -223,6 +230,7 @@ class Border(Middlebox):
     def destroy_iBGP_session(self, *args):
         for i in args:
             self.iBGP['client'].remove(i)
+        return None
 
     def get_iBGP_client(self) -> list:
         return self.iBGP['client'].copy()
