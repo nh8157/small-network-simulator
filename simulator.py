@@ -8,7 +8,8 @@ class Simulator:
         self.ibgp_config = ibgp_config
         self.routers = {}
         self.configure_routers()
-
+        self.init_eBGP()
+        
     def configure_routers(self):
         for i in self.ibgp_config.keys():
             if self.ibgp_config[i]["type"] == 1:
@@ -32,7 +33,6 @@ class Simulator:
     def insert_eBGP(self, prefix, gateway):
         ad = self.routers[gateway].insert_eBGP(prefix)
         client = self.routers[gateway].get_iBGP_client()
-        
         for c in client:
             self.update_iBGP_recursive(c, ad)
         # while len(client):
@@ -70,10 +70,15 @@ class Simulator:
     def delete_iBGP(self, server, client):
         self.routers[server].destroy_iBGP_session()
         advert = server
-        client = self.routers[client].destroy_iBGP_session([server], advert, 'client')
-        if client != None and client[0] != None:
-            for c in client[0]:
-                self.del_iBGP_recursive(c, server, advert)
+        # print("server", server)
+        nclient = self.routers[client].destroy_iBGP_session([server], advert, 'client')
+        # print("router", client, nclient)
+        if nclient != None and nclient[0] != None:
+            for c in nclient[0]:
+                self.del_iBGP_recursive(c, server, nclient[1])
+                print("Router", nclient)
+                if nclient[2] != None:
+                    self.update_iBGP_recursive(c, nclient[2])
         # while client != None and len(client):
         #     nc = []
         #     if client != None:
@@ -85,6 +90,7 @@ class Simulator:
 
     def del_iBGP_recursive(self, client, router, advert):
         argv = self.routers[client].remove_iBGP_ad(router, advert)
+        # print(client, argv)
         if argv != None:
             for i in argv[0]:
                 self.del_iBGP_recursive(i, router, argv[1])
@@ -95,6 +101,10 @@ class Simulator:
 
     def get_routers(self):
         return self.routers.copy()
+    
+    def init_eBGP(self):
+        self.insert_eBGP(6, 0)    
+        self.insert_eBGP(6, 1)
 
 
 def main():
@@ -118,9 +128,13 @@ def main():
     }
     
     s = Simulator(graph_config, ibgp_config)
-    s.insert_eBGP(6, 0)
-        
-    s.insert_eBGP(6, 1)
+    
+    """
+    a: s.delete_iBGP(0, 4)
+    b: s.delete_iBGP(1, 5)
+    c: s.delete_iBGP(1, 2)
+    d: s.start_iBGP(0, 3)
+    """
 
     while True:
         ins = int(input("Please type in command (1: start iBGP, 2: delete iBGP, 3: route packet): "))
@@ -138,13 +152,6 @@ def main():
             s.route_packet(server, client)
     
 
-    
-    s.delete_iBGP(0, 4)
-    s.delete_iBGP(1, 5)
-    s.start_iBGP(0, 3)
-    # s.delete_iBGP(1, 2)
-    
-    s.route_packet(5, 6)
 
 
 main()
