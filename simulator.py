@@ -116,12 +116,28 @@ def main():
         4: {"client": [], "server": [0, 2], "type": 1},
         5: {"client": [], "server": [1, 3], "type": 1}
     }
-
+    
     s = Simulator(graph_config, ibgp_config)
-
     s.insert_eBGP(6, 0)
         
     s.insert_eBGP(6, 1)
+
+    while True:
+        ins = int(input("Please type in command (1: start iBGP, 2: delete iBGP, 3: route packet): "))
+        if ins == 1 or ins == 2:
+            server = int(input("Please type in server index: "))
+            client = int(input("Please type in client index: "))
+            if ins == 1:
+                s.start_iBGP(server, client)
+            else:
+                s.delete_iBGP(server, client)
+            print("Changes applied successfully")
+        else:
+            server = int(input("Please type in sender index: "))
+            client = int(input("Please type in receipient index: "))
+            s.route_packet(server, client)
+    
+
     
     s.delete_iBGP(0, 4)
     s.delete_iBGP(1, 5)
