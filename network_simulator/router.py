@@ -20,6 +20,8 @@ class Middlebox:
             'client': [],
             'server': []
         }
+        # Access-control configs stored in a list of dictionaries
+        self.acl = []   # if no match till the end of the list, then denied
         # update routing table upon initialization
         self.update_routing_table()
 
@@ -39,6 +41,11 @@ class Middlebox:
         # get the receiver of this packet
         # then track put self.id on the packet
         receiver = packet.get_receiver()
+        # if the packet is not allowed by the acl
+        if not self.check_acl(packet):
+            print("Packet denied")
+            packet.terminate_packet()
+            return None
         packet.stamp_packet(self.get_id())
         # self is not the receipient of this packet
         if receiver != self.get_id():
@@ -144,6 +151,44 @@ class Middlebox:
     def get_route_mode(self, dst) -> bool:
         # returns true if the route is static, false otherwise
         return dst in self.static_route
+    
+    # check whether a packet is accepted by the router
+    def check_acl(self, pkt: p.Packet) -> bool:
+        src = pkt.get_sender()
+        dst = pkt.get_receiver()
+        for i in self.acl:
+            if i["src"] == src and i["dst"] == dst:
+                return i["act"]
+        return False
+
+    # add a rule into ACL list
+    def add_acl(self, act, src, dst, pos=-1) -> bool:
+        acl = self.init_acl(act, src, dst)
+        if acl not in self.acl:
+            if pos == -1:
+                self.acl.append(acl)
+            else:
+                self.acl.insert(pos, acl)
+            return True
+        else:
+            return False
+
+    # remove a rule from the ACL list
+    def remove_acl(self, act, src, dst) -> bool:
+        acl = self.init_acl(act, src, dst)
+        try:
+            self.acl.remove(acl)
+            return True
+        except ValueError:
+            return False
+
+    # return a new acl rule
+    def init_acl(self, act, src, dst) -> dict:
+        return  {
+                "act": act,
+                "src": src,
+                "dst": dst
+                }
 
     def get_BGP_session(self):
         return self.iBGP.copy()
@@ -334,6 +379,11 @@ if __name__ == '__main__':
 
     routers = [Router(i, graph_config) for i in range(4)]
     pk = p.Packet(1, 3)
+
+    for r in routers:
+        for i in range(len(routers)):
+            for j in range(len(routers)):
+                r.add_acl(True, i, j)
     
     # before changing to static route
     routers[1].route(pk)
@@ -344,10 +394,16 @@ if __name__ == '__main__':
 
     routers[1].route(pk)
 
+    # change back to dynamic route
     routers[1].remove_static_route(3)
     routers[1].static_to_dynamic(3)
     
     routers[1].route(pk)
+
+    # deny access on router 0
+    print(routers[0].remove_acl(True, 1, 3))
+
+    routers[0].route(pk) 
 
     # routers[0].dynamic_to_static(2)
     # routers[0].add_static_route(2, 2)

@@ -28,6 +28,9 @@ class Simulator:
             # could be skipped when only considering igp
             # self.routers[i].start_iBGP_session(self.ibgp_config.copy())
 
+    def get_router(self, router_id):
+        return self.routers[router_id]
+
     def route_packet(self, sender, receiver):
         # initialize a new packet
         pk = p.Packet(sender, receiver)
@@ -128,6 +131,16 @@ class Simulator:
         # first checks if the router is under static mode
         if router.get_route_mode(dst):
             router.static_to_dynamic(dst)
+
+    # add an acl rule to a router
+    def add_acl(self, router_id, act, src, dst, pos=-1) -> bool:
+        router = self.get_router(router_id)
+        return router.add_acl(act, src, dst, pos)
+
+    # remove an acl rule from a router
+    def remove_acl(self, router_id, act, src, dst) -> bool:
+        router = self.get_router(router_id)
+        return router.remove_acl(act, src, dst)
 
     def get_routers(self):
         return self.routers.copy()
