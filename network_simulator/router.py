@@ -1,25 +1,33 @@
 import abc
+from xmlrpc.client import Boolean
 import graph as g
 import packet as p
 
-
+# base class of all router types
 class Middlebox:
     def __init__(self, router_id, nodes_map):
         self.id = router_id
         self.graph = g.Graph(nodes_map)
+        # IGP config
         self.routing_table = None
+        # all routes are dynamic by default
+        # call dynamic_to_static to switch to static mode
+        self.static_route = []
+        # BGP config
         self.neighbor = None
+        self.iBGP_msg = {}
         self.iBGP = {
             'client': [],
             'server': []
         }
-        self.iBGP_msg = {}
+        # update routing table upon initialization
         self.update_routing_table()
 
     def get_id(self):
         return self.id
 
     def update_graph(self, n1, n2, cost):
+        # destroys the link when the cost is 0
         if not cost:
             self.graph.destroy_link(n1, n2)
         elif self.graph.has_link(n1, n2):
@@ -28,26 +36,31 @@ class Middlebox:
         self.update_routing_table()
 
     def route(self, packet: p.Packet):
+        # get the receiver of this packet
+        # then track put self.id on the packet
         receiver = packet.get_receiver()
         packet.stamp_packet(self.get_id())
+        # self is not the receipient of this packet
         if receiver != self.get_id():
             # packet has not arrived at the destination
             packet.dec_TTL()
         else:
+            # successfully received the packet
             packet.terminate_packet()
+            print("Destination reached")
+            return None
         try:
             next_hop = self.get_routing_table()[receiver]
-            if packet.get_TTL() and not packet.has_terminate():
+            # TTL is still valid and packet not yet terminated
+            if packet.get_TTL() > 0 and not packet.has_terminate():
                 if next_hop != None:
                     print("Next hop:", next_hop)
-                    return self.get_routing_table()[receiver]
+                    return next_hop
+                # packet has reached boundary router
                 print("Intra-AS -> Inter-AS")
                 packet.terminate_packet()
                 return None
-            elif packet.get_TTL() and packet.has_terminate():
-                print("Destination reached")
-                packet.terminate_packet()
-                return None
+            # TTL reaches 0, packet dropped
             elif not packet.get_TTL() and not packet.has_terminate():
                 packet.terminate_packet()
                 print("Forwarding loop detected")
@@ -55,10 +68,15 @@ class Middlebox:
 
         except KeyError:
             packet.terminate_packet()
-            return "Destination not reachable"
+            print("Destination not reachable")
+            return None
 
     def update_routing_table(self):
-        self.routing_table = self.graph.dijkstra(self.id)
+        new_table = self.graph.dijkstra(self.id)
+        # swap the next hop for static route with the one in the old dictionary
+        for i in self.static_route:
+            new_table[i] = self.routing_table[i]
+        self.routing_table = new_table
 
     def append_routing_table(self, dest, gateway) -> None:
         self.routing_table[dest] = gateway
@@ -67,7 +85,65 @@ class Middlebox:
         del self.routing_table[dest]
 
     def get_routing_table(self):
-        return self.routing_table
+        return self.routing_table.copy()
+
+    # adds a static route to the current routing table
+    def add_static_route(self, dst, nh) -> bool:
+        # check if the route is in static route mode
+        if dst in self.static_route:
+            # check if the next hop is self's neighbor
+            if not self.graph.has_link(self.id, nh):
+                print("No link between", self.id, nh)
+                return False
+            # overwrites the existing entry (if any exists)
+            self.routing_table[dst] = nh
+            return True
+        return False
+
+    # removes a static route from the current routing table
+    def remove_static_route(self, dst) -> bool:
+        # first checks if there is a static route
+        if dst not in self.static_route:
+            print("Not a static route")
+            return False
+        # removes this route from the routing table and the static route entry
+        # once a static entry is deleted, the link automatically 
+        del self.routing_table[dst]
+        return True
+
+    # changes a route's state from dynamic to static    
+    def dynamic_to_static(self, dst) -> bool:
+        # the route was not set as static route
+        if dst not in self.static_route:
+            self.static_route.append(dst)
+            # remove the dynamic route in the routing table
+            try:
+                del self.routing_table[dst]
+            except KeyError:
+                print("Unknown destination")
+            return True
+        # the route was already set as static route
+        return False
+
+    # changes a route's state from static to dynamic
+    def static_to_dynamic(self, dst) -> bool:
+        # the route was set as static
+        if dst in self.static_route:
+            self.static_route.remove(dst)
+            # runs graph algo to recalculate the path
+            self.update_routing_table()
+            return True
+        # the route was not set as static
+        return False
+
+    # get the list of routes that are configured statically
+    def get_static_route(self) -> list:
+        return self.static_route.copy()
+
+    # get whether the route is configured statically or dynamically
+    def get_route_mode(self, dst) -> bool:
+        # returns true if the route is static, false otherwise
+        return dst in self.static_route
 
     def get_BGP_session(self):
         return self.iBGP.copy()
@@ -250,36 +326,46 @@ class Border(Middlebox):
 
 if __name__ == '__main__':
     graph_config = {
-        0: {1: 1},
-        1: {0: 1, 2: 2},
-        2: {1: 2}
+        0: {1: 1, 3: 1},
+        1: {0: 1, 3: 1, 2: 1},
+        2: {1: 1, 3: 1},
+        3: {0: 1, 1: 1, 2: 1},
     }
 
-    ibgp_config = {
-        0: {"client": [1], "server": [1]},
-        1: {"client": [0, 2], "server": [0, 2]},
-        2: {"client": [1], "server": [1]}
-    }
+    routers = [Router(i, graph_config) for i in range(4)]
+    pk = p.Packet(1, 3)
+    
+    # before changing to static route
+    routers[1].route(pk)
 
-    r0 = Border(0, graph_config)
-    r1 = RR(1, graph_config)
-    r2 = Border(2, graph_config)
+    # change to static route
+    routers[1].dynamic_to_static(3)
+    routers[1].add_static_route(3, 0)
 
-    r0.start_iBGP_session(ibgp_config)
-    r1.start_iBGP_session(ibgp_config)
-    r2.start_iBGP_session(ibgp_config)
+    routers[1].route(pk)
 
-    ad = r0.draft_iBGP_ad(4)
-    r = r0.get_iBGP_client()
-    print(r)
+    routers[1].remove_static_route(3)
+    routers[1].static_to_dynamic(3)
+    
+    routers[1].route(pk)
 
-    argv = r1.receive_iBGP_ad(ad)
-    print(argv)
+    # routers[0].dynamic_to_static(2)
+    # routers[0].add_static_route(2, 2)
+    # r0.start_iBGP_session(ibgp_config)
+    # r1.start_iBGP_session(ibgp_config)
+    # r2.start_iBGP_session(ibgp_config)
 
-    r = argv[1]
+    # ad = r0.draft_iBGP_ad(4)
+    # r = r0.get_iBGP_client()
+    # print(r)
 
-    argv = r2.receive_iBGP_ad(argv[0])
-    print(argv)
+    # argv = r1.receive_iBGP_ad(ad)
+    # print(argv)
+
+    # r = argv[1]
+
+    # argv = r2.receive_iBGP_ad(argv[0])
+    # print(argv)
     # r1.receive_iBGP_ad({"dest": 4, "gate": 0, "advertiser": 0})
     # r1.receive_iBGP_ad({"dest": 4, "gate": 2, "advertiser": 2})
 

@@ -29,6 +29,7 @@ class Graph:
             table[min_node]['visited'] = True
         # construct the routing table, given the dijkstra table
         self.table = table
+        # do we need another field to specify whether the route is static or dynamic?
         routing = {dst: self.get_next_hop(table, source, dst) for dst in self.map.keys()}
         return routing
 
