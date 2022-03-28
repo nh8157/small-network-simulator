@@ -1,6 +1,6 @@
 from mimetypes import init
-import router as r
-import packet as p
+import network_simulator.router as r
+import network_simulator.packet as p
 
 class Simulator:
     def __init__(self, graph_config: dict, ibgp_config: dict):

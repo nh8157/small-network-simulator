@@ -1,7 +1,6 @@
 import abc
-from xmlrpc.client import Boolean
-import graph as g
-import packet as p
+import network_simulator.graph as g
+import network_simulator.packet as p
 
 # base class of all router types
 class Middlebox:
