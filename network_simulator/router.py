@@ -53,14 +53,12 @@ class Middlebox:
         else:
             # successfully received the packet
             packet.terminate_packet()
-            print("Destination reached")
             return None
         try:
             next_hop = self.get_routing_table()[receiver]
             # TTL is still valid and packet not yet terminated
             if packet.get_TTL() > 0 and not packet.has_terminate():
                 if next_hop != None:
-                    print("Next hop:", next_hop)
                     return next_hop
                 # packet has reached boundary router
                 print("Intra-AS -> Inter-AS")

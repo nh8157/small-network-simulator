@@ -1,7 +1,9 @@
 from mimetypes import init
 import network_simulator.router as r
 import network_simulator.packet as p
+from network_simulator.config import *
 from copy import deepcopy
+from typing import List
 
 class Simulator:
     def __init__(self, graph_config: dict, ibgp_config: dict):
@@ -12,7 +14,79 @@ class Simulator:
         self.configure_routers()
         # no eBGP is considered at the moment
         # self.init_eBGP()
-        
+
+    def apply_config(self, configs):
+        for config in configs:
+            config_name = str(config.get_config())
+            config_type = str(config)
+            if config_name == "StaticRoute":
+                r = config.get_router()
+                sr = config.get_config()
+                dst = sr.dst
+                nh = sr.nh
+                if config_type == "Append":
+                    if self.get_route_mode(r, dst):
+                        self.switch_route_mode(r, dst)
+                    self.add_static_route(r, dst, nh)
+                elif config_type == "Remove":
+                    self.del_static_route(r, dst)
+                elif config_type == "Update":
+                    old_config = config.get_old_config()
+                    old_r = old_config.get_router()
+                    old_dst = old_config.get_config().dst
+                    if str(old_config) == "StaticRoute" and old_r == r and old_dst == dst:
+                        self.del_static_route(old_config.get_router(), old_config.get_config().dst)
+                        self.add_static_route(r, dst, nh)
+                    else:
+                        print("Mismatched configuration")
+                else:
+                    print("Invalid action")
+            elif config_name == "LinkWeight":
+                r1 = config.get_config().a
+                r2 = config.get_config().b
+                w = config.get_config().weight
+                if self.is_neighbor(r1, r2):
+                    if config_type == "Append":
+                        # if this is a static route
+                        # switch back to dynamic mode
+                        if self.get_route_mode(r1, r2):
+                            self.switch_route_mode()
+                        self.update_link_cost(r1, r2, w)
+                    elif config_type == "Remove":
+                        self.update_link_cost(r1, r2, 0)
+                    elif config_type == "Update":
+                        old_config = config.get_old_config()
+                        old_r = old_config.get_router()
+                        old_a = old_config.get_config().a
+                        old_b = old_config.get_config().b
+                        if r1 == old_a and r2 == old_b:
+                            self.update_link_cost(r1, r2, w)
+                        else:
+                            print("Mismatched configuration")
+                    else:
+                        print("Invalid action")
+            elif config_name == "ACL":
+                src = config.get_config().src
+                dst = config.get_config().dst
+                act = config.get_config().act
+                r = config.get_router()
+                if config_type == "Append":
+                    self.add_acl(r, act, src, dst)
+                elif config_type == "Remove":
+                    self.remove_acl(r, act, src, dst)
+                elif config_type == "Update":
+                    old_config = config.get_old_config()
+                    old_r = old_config.get_router()
+                    old_src = old_config.get_config().src
+                    old_dst = old_config.get_config().dst
+                    old_act = old_config.get_config().act
+                    self.remove_acl(old_r, old_act, old_src, old_dst)
+                    self.add_acl(r, act, src, dst)
+                else:
+                    print("Invalid action")
+            else:
+                print("Invalid configuration")
+
     # initializer function that instantiate each router and put it into the routers dictionary
     def configure_routers(self):
         # configure routers based on the ibgp_config dictionary
@@ -45,13 +119,17 @@ class Simulator:
         router = sender
         # stops when the packet is terminated
         while not pk.has_terminate() and router != None:
-            print("########## Packet at router", router, "##########")
             # gets the router id for the next hop
             router = self.routers[router].route(pk)
+        return pk.get_path()
 
     ########################################################################
     ###############################Checker##################################
     ########################################################################
+
+    # check if two nodes are adjacent
+    def is_neighbor(self, a, b) -> bool:
+        return b in self.routers[a].keys()
 
     # check reachability of all paths between two nodes
     def check_node_reachability(self, a, b):
@@ -119,12 +197,17 @@ class Simulator:
         if router.get_route_mode(dst):
             router.remove_static_route(dst)
 
+    def get_route_mode(self, src, dst):
+        return self.routers[src].get_route_mode(dst)
+
     # switch route mode to dynamic
     def switch_route_mode(self, src, dst):
         router = self.routers[src]
         # first checks if the router is under static mode
         if router.get_route_mode(dst):
             router.static_to_dynamic(dst)
+        else:
+            router.dynamic_to_static(dst)
     
     ########################################################################
     ########################################################################
