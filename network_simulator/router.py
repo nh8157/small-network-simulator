@@ -41,7 +41,7 @@ class Middlebox:
         # then track put self.id on the packet
         receiver = packet.get_receiver()
         # if the packet is not allowed by the acl
-        if not self.check_acl(packet):
+        if not self.check_acl(packet.get_sender(), packet.get_receiver()):
             print("Packet denied")
             packet.terminate_packet()
             return None
@@ -92,6 +92,9 @@ class Middlebox:
 
     def get_routing_table(self):
         return self.routing_table.copy()
+
+    def get_next_hop(self, dst):
+        return self.get_routing_table()[dst]
 
     # adds a static route to the current routing table
     def add_static_route(self, dst, nh) -> bool:
@@ -152,9 +155,7 @@ class Middlebox:
         return dst in self.static_route
     
     # check whether a packet is accepted by the router
-    def check_acl(self, pkt: p.Packet) -> bool:
-        src = pkt.get_sender()
-        dst = pkt.get_receiver()
+    def check_acl(self, src, dst) -> bool:
         for i in self.acl:
             if i["src"] == src and i["dst"] == dst:
                 return i["act"]

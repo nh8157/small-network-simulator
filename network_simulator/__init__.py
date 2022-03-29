@@ -1,6 +1,7 @@
 from mimetypes import init
 import network_simulator.router as r
 import network_simulator.packet as p
+from copy import deepcopy
 
 class Simulator:
     def __init__(self, graph_config: dict, ibgp_config: dict):
@@ -12,6 +13,7 @@ class Simulator:
         # no eBGP is considered at the moment
         # self.init_eBGP()
         
+    # initializer function that instantiate each router and put it into the routers dictionary
     def configure_routers(self):
         # configure routers based on the ibgp_config dictionary
         for i in self.ibgp_config.keys():
@@ -28,9 +30,15 @@ class Simulator:
             # could be skipped when only considering igp
             # self.routers[i].start_iBGP_session(self.ibgp_config.copy())
 
+    # return a single router object based on id given
     def get_router(self, router_id):
         return self.routers[router_id]
 
+    # return all routers in the 
+    def get_routers(self):
+        return deepcopy(self.routers)
+
+    # function to route a packet from a host to another host in the network
     def route_packet(self, sender, receiver):
         # initialize a new packet
         pk = p.Packet(sender, receiver)
@@ -41,6 +49,108 @@ class Simulator:
             # gets the router id for the next hop
             router = self.routers[router].route(pk)
 
+    ########################################################################
+    ###############################Checker##################################
+    ########################################################################
+
+    # check reachability of all paths between two nodes
+    def check_node_reachability(self, a, b):
+        paths = self.generate_possible_paths(a, b, [])
+        cond = False
+        for p in paths:
+            cond = cond or self.check_path_reachability(p)
+        return cond
+
+    # check reachability on a given path
+    def check_path_reachability(self, path: list) -> bool:
+        ptr = 0
+        cond = True
+        while ptr < len(path) - 1:
+            router_id = path[ptr]
+            router = self.routers[router_id]
+            # whether acl accepts the traffic
+            acl = router.check_acl(path[0], path[-1])
+            # whether next hop is the same as it is in the list
+            nh = router.get_next_hop(path[-1])
+            cond = (cond and (nh == path[ptr + 1] and acl))
+            ptr += 1
+        return cond
+
+    # generate legal paths between two nodes
+    def generate_possible_paths(self, a, b, path=[]) -> list:
+        path.append(a)
+        if a == b:
+            return [path]
+        paths = []
+        nhs = self.graph_config[a]
+        for nh in nhs.keys():
+            if nh not in path:
+                new_path = path.copy()
+                new_paths = self.generate_possible_paths(nh, b, new_path)
+                for i in new_paths:
+                    paths.append(i.copy())
+        return paths
+    
+    # update weight of a link given two neighbors
+    def update_link_cost(self, l1, l2, cost):
+        for i in self.routers.values():
+            i.update_graph(l1, l2, cost)
+
+    ########################################################################
+    ########################################################################
+    ########################################################################
+
+    ########################################################################
+    ################################Route###################################
+    ########################################################################
+
+    # add a static route to the graph
+    def add_static_route(self, src, dst, nh):
+        router = self.routers[src]
+        # first check if the route is in static mode
+        if not router.get_route_mode(dst):
+            router.dynamic_to_static(dst)
+        router.add_static_route(dst, nh)
+
+    # delete a static route from the graph
+    def del_static_route(self, src, dst):
+        router = self.routers[src]
+        # first check if the route is in static mode
+        if router.get_route_mode(dst):
+            router.remove_static_route(dst)
+
+    # switch route mode to dynamic
+    def switch_route_mode(self, src, dst):
+        router = self.routers[src]
+        # first checks if the router is under static mode
+        if router.get_route_mode(dst):
+            router.static_to_dynamic(dst)
+    
+    ########################################################################
+    ########################################################################
+    ########################################################################
+
+    ########################################################################
+    ################################ACL#####################################
+    ########################################################################
+
+    # add an acl rule to a router
+    def add_acl(self, router_id, act, src, dst, pos=-1) -> bool:
+        router = self.get_router(router_id)
+        return router.add_acl(act, src, dst, pos)
+
+    # remove an acl rule from a router
+    def remove_acl(self, router_id, act, src, dst) -> bool:
+        router = self.get_router(router_id)
+        return router.remove_acl(act, src, dst)
+
+    ########################################################################
+    ########################################################################
+    ########################################################################
+
+    ########################################################################
+    ################################BGP#####################################
+    ########################################################################
     def insert_eBGP(self, prefix, gateway):
         ad = self.routers[gateway].insert_eBGP(prefix)
         client = self.routers[gateway].get_iBGP_client()
@@ -105,49 +215,15 @@ class Simulator:
         if argv != None:
             for i in argv[0]:
                 self.del_iBGP_recursive(i, router, argv[1])
-
-    def update_link_cost(self, l1, l2, cost):
-        for i in self.routers.values():
-            i.update_graph(l1, l2, cost)
-
-    # add a static route to the graph
-    def add_static_route(self, src, dst, nh):
-        router = self.routers[src]
-        # first check if the route is in static mode
-        if not router.get_route_mode(dst):
-            router.dynamic_to_static(dst)
-        router.add_static_route(dst, nh)
-
-    # delete a static route from the graph
-    def del_static_route(self, src, dst):
-        router = self.routers[src]
-        # first check if the route is in static mode
-        if router.get_route_mode(dst):
-            router.remove_static_route(dst)
-
-    # switch route mode to dynamic
-    def switch_route_mode(self, src, dst):
-        router = self.routers[src]
-        # first checks if the router is under static mode
-        if router.get_route_mode(dst):
-            router.static_to_dynamic(dst)
-
-    # add an acl rule to a router
-    def add_acl(self, router_id, act, src, dst, pos=-1) -> bool:
-        router = self.get_router(router_id)
-        return router.add_acl(act, src, dst, pos)
-
-    # remove an acl rule from a router
-    def remove_acl(self, router_id, act, src, dst) -> bool:
-        router = self.get_router(router_id)
-        return router.remove_acl(act, src, dst)
-
-    def get_routers(self):
-        return self.routers.copy()
-    
+ 
     def init_eBGP(self):
         self.insert_eBGP(6, 0)    
         self.insert_eBGP(6, 1)
+
+    ########################################################################
+    ########################################################################
+    ########################################################################
+
 
 def init_bgp_config(client, server, router_type) -> dict:
     return {"client": client, "server": server, "type": router_type}
@@ -201,6 +277,8 @@ def main():
     s.del_static_route(1, 3)
     s.switch_route_mode(1, 3)
     s.route_packet(1, 3)
+
+    s.check_path_reachability([1, 0, 3])
     
     """
     a: s.delete_iBGP(0, 4)
