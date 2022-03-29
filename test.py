@@ -41,5 +41,7 @@ print(paths)
 for p in paths:
     print(p)
     print(s.check_path_reachability(p))
+
 print()
 print(s.check_node_reachability(2, 3))
+print(s.check_node_reachability(2, 0))
