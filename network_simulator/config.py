@@ -58,7 +58,7 @@ class Update(Config):
         self.old_config = old_config
 
     def get_old_config(self):
-        return self.old_config.copy()
+        return self.old_config
 
     def __str__(self) -> str:
         return "Update"

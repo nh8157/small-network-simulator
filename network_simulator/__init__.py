@@ -117,11 +117,15 @@ class Simulator:
         # initialize a new packet
         pk = p.Packet(sender, receiver)
         router = sender
+        edges = []
         # stops when the packet is terminated
         while not pk.has_terminate() and router != None:
             # gets the router id for the next hop
-            router = self.routers[router].route(pk)
-        return pk.get_path()
+            new_router = self.routers[router].route(pk)
+            if new_router != None:
+                edges.append([router, new_router])
+            router = new_router
+        return edges
 
     ########################################################################
     ###############################Checker##################################
