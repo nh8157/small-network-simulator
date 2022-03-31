@@ -4,11 +4,8 @@ from copy import deepcopy
 from typing import List
 from policy import *
 
-# return nodes that is in the new path 
-def path_synthesize(a, b, ns_old: ns.Simulator, ns_new: ns.Simulator, config: list):
-    # get old and new routes
-    old_route = ns_old.route_packet(a, b)
-    new_route = ns_new.route_packet(a, b)
+# order configurations that influences reachability between the two nodes
+def path_synthesize(old_route: list, new_route: list, config: list) -> dict:
     # find nodes common to both old and new routes
     common_nodes = find_common_nodes(edge_to_node(old_route), edge_to_node(new_route))
     # find edges that is in the new route only
@@ -17,8 +14,8 @@ def path_synthesize(a, b, ns_old: ns.Simulator, ns_new: ns.Simulator, config: li
     boundary_routers = find_boundary_routers(common_nodes, new_edges)
     # using boundary routers, find zones
     zones = find_zones(new_edges, boundary_routers)
-    dependency = {}
     # find dependency among configs
+    dependency = {}
     for c in config:
         router = c.get_router()
         for i, j in zones.items():
@@ -37,22 +34,25 @@ def path_synthesize(a, b, ns_old: ns.Simulator, ns_new: ns.Simulator, config: li
                         dependency[i] = [[], c, []]
     return dependency
 
-def find_zones(new_edges, common_nodes) -> dict:
+# return zones in the new graph encompassed by boundary routers
+def find_zones(new_edges, boundary_routers) -> dict:
     common = None
     zones = {}
     for i in new_edges:
-        if i[0] in common_nodes:
+        if i[0] in boundary_routers:
             common = i[0]
             zones[common] = []
         else:
             zones[common].append(i[0])
     return zones
 
-def find_boundary_routers(comm, edges):
+# find boundary routers that encompass disparate zones
+def find_boundary_routers(comm, edges) -> list:
     nodes = edge_to_node(edges)
     return find_common_nodes(nodes, comm)
 
-def find_common_nodes(lst1: list, lst2: list):
+# find nodes that exist in both paths
+def find_common_nodes(lst1: list, lst2: list) -> list:
     if len(lst1) == 0 or len(lst2) == 0:
         return []
         
@@ -65,14 +65,28 @@ def find_common_nodes(lst1: list, lst2: list):
             return c1
         return c2
 
-def find_diff_edges(lst1: list, lst2: list):
+# returns a list of configurations that is either on the old path or the new path
+def find_relevant_config(old_route, new_route, config) -> list:
+    # convert from the edge expression to the node expression
+    old_nodes = edge_to_node(old_route)
+    new_nodes = edge_to_node(new_route)
+    relevant_config = []
+    for i in config:
+        router = i.get_router()
+        if router in old_nodes or router in new_nodes:
+            relevant_config.append(i)
+    return relevant_config
+
+# finds edges that is unique to lst2
+def find_diff_edges(lst1: list, lst2: list) -> list:
     edges = []
     for e in lst2:
         if e not in lst1:
             edges.append(e)
     return edges
 
-def edge_to_node(l: List[list]):
+# converts a path from a list of edges to a list of nodes
+def edge_to_node(l: List[list]) -> list:
     i = 0
     nodes = []
     while i < len(l):
@@ -82,32 +96,27 @@ def edge_to_node(l: List[list]):
         i += 1
     return nodes
 
-def synthesize(ns: ns.Simulator, config: list, cond: list):
-    new_ns = deepcopy(ns)
+# order configurations according to the 
+def synthesize(old_ns: ns.Simulator, config: list, cond: list) -> bool:
+    new_ns = deepcopy(old_ns)
     new_ns.apply_config(config)
     reachability = True
+    dependency = {}
     for c in cond:
-        src = c.a
-        dst = c.b
-        old_route = ns.route_packet(src, dst)
-        new_route = new_ns.route_packet(src, dst)
-        old_nodes = edge_to_node(old_route)
-        new_nodes = edge_to_node(new_route)
-        # needs a function to determine if a configuration would influence reachability
-        relevant_config = []
-        for i in config:
-            router = i.get_router()
-            if router in old_nodes or router in new_nodes:
-                relevant_config.append(i)
-        dependency = path_synthesize(src, dst, ns, new_ns, relevant_config)
-        for v in dependency.values():
+        src, dst = c.a, c.b
+        old_route = old_ns.route(src, dst)
+        new_route = new_ns.route(src, dst)
+        relevant_config = find_relevant_config(old_route, new_route, config)
+        dependency[c] = path_synthesize(old_route, new_route, relevant_config)
+        for v in dependency[c].values():
             for c in v[0]:
-                ns.apply_config([c])
-                reachability = reachability and ns.check_node_reachability(src, dst)
-            ns.apply_config([c])
-            reachability = reachability and ns.check_node_reachability(src, dst)
-
-    return reachability
+                old_ns.apply_config([c])
+                reachability = reachability and old_ns.check_node_reachability(src, dst)
+            old_ns.apply_config([c])
+            reachability = reachability and old_ns.check_node_reachability(src, dst)
+        print(reachability)
+    # need a final step here to construct the dependency graph    
+    return dependency
 
 if __name__ == '__main__':
     graph = {
@@ -132,7 +141,7 @@ if __name__ == '__main__':
     config.append(Append(StaticRoute(1, 2), 3))
     config.append(Append(StaticRoute(1, 1), 2))
     s.apply_config(config)
-    # assert s.route_packet(0, 1) == [[0, 2], [2, 1]]
+    # assert s.route(0, 1) == [[0, 2], [2, 1]]
     
     new_config = []
     new_config.append(Update(StaticRoute(1, 4), 3, Config(StaticRoute(1, 2), 3)))
@@ -143,4 +152,3 @@ if __name__ == '__main__':
     cond = [Reachability(5, 1)]
 
     reachability = synthesize(s, new_config, cond)
-    assert reachability == True

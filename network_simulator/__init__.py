@@ -15,6 +15,7 @@ class Simulator:
         # no eBGP is considered at the moment
         # self.init_eBGP()
 
+    # applies configurations in a list to the network simulator
     def apply_config(self, configs):
         for config in configs:
             config_name = str(config.get_config())
@@ -113,7 +114,7 @@ class Simulator:
         return deepcopy(self.routers)
 
     # function to route a packet from a host to another host in the network
-    def route_packet(self, sender, receiver):
+    def route(self, sender, receiver):
         # initialize a new packet
         pk = p.Packet(sender, receiver)
         router = sender
@@ -353,17 +354,17 @@ def main():
 
     # before switching to static route
     print("\nDynamic mode")
-    s.route_packet(1, 3)
+    s.route(1, 3)
 
     # after switching to static route
     print("\nStatic mode")
     s.add_static_route(1, 3, 0)
-    s.route_packet(1, 3)
+    s.route(1, 3)
 
     print("\nDynamic mode")
     s.del_static_route(1, 3)
     s.switch_route_mode(1, 3)
-    s.route_packet(1, 3)
+    s.route(1, 3)
 
     s.check_path_reachability([1, 0, 3])
     
@@ -387,7 +388,7 @@ def main():
     #     else:
     #         server = int(input("Please type in sender index: "))
     #         client = int(input("Please type in receipient index: "))
-    #         s.route_packet(server, client)
+    #         s.route(server, client)
 
 if __name__ == '__main__':
     main()

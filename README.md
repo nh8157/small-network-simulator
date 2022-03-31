@@ -30,7 +30,7 @@ ibgp_config = {
 s = ns.Simulator(graph_config, ibgp_config)
 
 # given router IDs, route packets between two hosts in the graph
-s.route_packet(1, 3)
+s.route(1, 3)
 
 # change link weight between two hosts
 # first and second arguments specifies the router ID, third argument
