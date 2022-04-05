@@ -317,25 +317,6 @@ def init_bgp_config(client, server, router_type) -> dict:
     return {"client": client, "server": server, "type": router_type}
 
 def main():
-    # define a new packet
-    # graph_config = {
-    #     0: {3: 1, 4: 1},
-    #     1: {2: 1, 5: 1},
-    #     2: {1: 1, 3: 1},
-    #     3: {0: 1, 2: 1},
-    #     4: {0: 1, 5: 1},
-    #     5: {1: 1, 4: 1}
-    # }
-    
-    # ibgp_config = {
-    #     0: {"client": [2, 4], "server": [], "type": 3},
-    #     1: {"client": [2, 3, 5], "server": [], "type": 3},
-    #     2: {"client": [4], "server": [0, 1], "type": 2},
-    #     3: {"client": [5], "server": [1], "type": 2},
-    #     4: {"client": [], "server": [0, 2], "type": 1},
-    #     5: {"client": [], "server": [1, 3], "type": 1}
-    # }
-
     graph_config = {
         0: {1: 1, 3: 1},
         1: {0: 1, 3: 1, 2: 1},

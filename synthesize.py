@@ -1,5 +1,6 @@
 from network_simulator.config import Append, ACL, StaticRoute, Update, Config
 import network_simulator as ns
+import dep_graph as dep
 from copy import deepcopy
 from typing import List
 from policy import *
@@ -96,6 +97,10 @@ def edge_to_node(l: List[list]) -> list:
         i += 1
     return nodes
 
+# construct a dependency graph based on the dependent relationships given
+def construct_dependency_graph(dep_dict: dict) -> list:
+    pass
+
 # order configurations according to the 
 def synthesize(old_ns: ns.Simulator, config: list, cond: list) -> bool:
     new_ns = deepcopy(old_ns)
@@ -140,15 +145,22 @@ if __name__ == '__main__':
                 config.append(Append(ACL(True, a, b), i))
     config.append(Append(StaticRoute(1, 2), 3))
     config.append(Append(StaticRoute(1, 1), 2))
+    config.append(Append(StaticRoute(3, 3), 2))
     s.apply_config(config)
-    # assert s.route(0, 1) == [[0, 2], [2, 1]]
     
     new_config = []
     new_config.append(Update(StaticRoute(1, 4), 3, Config(StaticRoute(1, 2), 3)))
     new_config.append(Append(StaticRoute(1, 2), 4))
     new_config.append(Update(StaticRoute(1, 0), 2, Config(StaticRoute(1, 1), 2)))
     new_config.append(Append(StaticRoute(1, 1), 0))
+    new_config.append(Update(StaticRoute(3, 4), 2, Config(StaticRoute(3, 3), 2)))
+    new_config.append(Append(StaticRoute(3, 3), 4))
 
-    cond = [Reachability(5, 1)]
+    cond = []
 
-    reachability = synthesize(s, new_config, cond)
+    for i in range(6):
+        for j in range(6):
+            cond.append(Reachability(i, j))
+
+    dependency = synthesize(s, new_config, cond)
+    print(dependency)
